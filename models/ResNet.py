@@ -1,164 +1,158 @@
 import torch.nn as nn
 import torch
-from torchvision.models import vgg19
 from torchsummary import summary
 
-class VGG19(nn.Module): # VGG19
-    def __init__(self):
-        super(VGG19, self).__init__()
-        vgg19_model = vgg19(pretrained=True) # pretrained된 vgg19 model
-        self.feature_extractor = nn.Sequential(*list(vgg19_model.features.children())[:18])
-
-    def forward(self, img): # forward
-        return self.feature_extractor(img)
-
-class ResidualBlock_v1(nn.Module): # ResNet BasicBlock
-    def __init__(self, in_features,out_features,stride=1):
-        super(ResidualBlock_v1, self).__init__()
-        self.downsample = stride
-        self.conv_block = nn.Sequential(
-            nn.Conv2d(in_features, out_features, kernel_size=3, stride=stride, padding=1,bias=False), # 3X3 conv filter = same
-            nn.BatchNorm2d(out_features, 0.8), # batch normalization
-            nn.PReLU(), # Leakly ReLU
-            nn.Conv2d(out_features, out_features, kernel_size=3, stride=1, padding=1,bias=False), # 3X3 conv filter = same
-            nn.BatchNorm2d(out_features, 0.8), # batch normalization
-        )
-        if stride == 2:
-            self.downsampling = nn.Conv2d(in_features,out_features,kernel_size=1,stride=2)
-
-        self.ReLU = nn.ReLU()
-
-    def forward(self, x):
-        conv_out = self.conv_block(x)
-        if(self.downsample == 2):
-            x = self.downsampling(x)
-        return self.ReLU(x + conv_out)# concat ( shortcut connection )
-
-class ResidualBlock_v2(nn.Module): # ResNet BasicBlock
+class BasicBlock(nn.Module):  # BasicBlock ( ResNet-18 & ResNet-34 )
     def __init__(self, in_features, out_features, stride=1):
-        super(ResidualBlock_v2, self).__init__()
-
+        super(BasicBlock, self).__init__()
         self.downsample = stride
-
         self.conv_block = nn.Sequential(
-            nn.Conv2d(in_features, in_features, kernel_size=1, stride=stride, bias=False), # 3X3 conv filter = same
-            nn.BatchNorm2d(in_features, 0.8), # batch normalization
-            nn.ReLU(), # Leakly ReLU
-            nn.Conv2d(in_features, in_features, kernel_size=3, stride=1, padding=1, bias=False), # 3X3 conv filter = same
-            nn.BatchNorm2d(in_features, 0.8), # batch normalization
-            nn.ReLU(),  # Leakly ReLU
-            nn.Conv2d(in_features, out_features, kernel_size=1, stride=1, bias=False),  # 3X3 conv filter = same
+            nn.Conv2d(in_features, out_features, kernel_size=3, stride=stride, padding=1, bias=False),
+            nn.BatchNorm2d(out_features, 0.8),  # batch normalization
+            nn.ReLU(),  #  ReLU
+            nn.Conv2d(out_features, out_features, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(out_features, 0.8),  # batch normalization
         )
+        if stride == 2:
+            self.downsampling = nn.Conv2d(in_features, out_features, kernel_size=1, stride=2)
 
         self.ReLU = nn.ReLU()
-        if stride == 2:
-            self.downsampling = nn.Conv2d(in_features,out_features,kernel_size=1,stride=2)
-        self.none_downsampling = nn.Conv2d(in_features,out_features,kernel_size=1,stride=1)
 
     def forward(self, x):
-        conv_out = self.conv_block(x)
-        if(self.downsample == 2):
+        block_out = self.conv_block(x)
+        if (self.downsample == 2):
             x = self.downsampling(x)
-        else:
-            x = self.none_downsampling(x)
-        print(x.shape)
+        out = self.ReLU(x + block_out)  # concat ( shortcut connection )
+        return out
 
-        #print(x.shape)
-        #print(conv_out.shape)
-        return self.ReLU(x + conv_out)# concat ( shortcut connection )
+
+class BottleNeck(nn.Module):  # Bottleneck ( ResNet-50 & ResNet-101 & ResNet-152 )
+    def __init__(self, in_features, out_features, stride=1):
+        super(BottleNeck, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        if stride == 2:
+            self.downsample = True  # DownSampling을 해야하는지에 대한 정보
+        else:
+            self.downsample = False
+        self.block_features = self.out_features // 4
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(in_channels=self.in_features, out_channels=self.block_features, kernel_size=1, bias=False),
+            # 3X3 conv filter = same
+            nn.BatchNorm2d(self.block_features, 0.8),  # batch normalization
+            nn.ReLU(),  # ReLU
+            nn.Conv2d(in_channels=self.block_features, out_channels=self.block_features, kernel_size=3, stride=stride,
+                      padding=1, bias=False),  # 3X3 conv 만약 해당 블록의 처음일 경우에는 down sample을 해야 하기 때문에 stride = 2임.
+            nn.BatchNorm2d(self.block_features, 0.8),  # batch normalization
+            nn.ReLU(),  # ReLU
+            nn.Conv2d(in_channels=self.block_features, out_channels=self.out_features, kernel_size=1, stride=1,
+                      bias=False),  # 3X3 conv filter = same
+            nn.BatchNorm2d(self.out_features, 0.8),  # batch normalization
+        )
+
+        self.ReLU = nn.ReLU()
+        if self.downsample:  #stride가 2인 경우에 input의 값을 다운샘플링 해주어야 함.
+            self.downsampling = nn.Conv2d(self.in_features, out_features, kernel_size=1,
+                                          stride=2)  # 따라서 1X1 conv의 stride=2를 통하여 down sampling을 진행
+        else:
+            self.downsampling = nn.Conv2d(self.in_features, out_features, kernel_size=1,
+                                          stride=1)  # 그 외의 경우에는 down sampling을 하지 않고 filter만 확장
+
+    def forward(self, input):
+        # params = list(self.conv_block.parameters())
+        # print("conv1 weight: ",params[0].size())
+        block_out = self.conv_block(input)
+        x = self.downsampling(input)
+        out = self.ReLU(x + block_out)  # concat ( shortcut connection )
+        return out
 
 
 class ResNet(nn.Module):
-    def __init__(self, input_shape, n_residual_blocks,basic_block = 'v1'):
-        super(ResNet,self).__init__()
+    def __init__(self, input_shape, n_residual_blocks, basic_block='v1', classes=1000):     #input_shape = 입력 이미지 (학습) / n_residual_blocks = ResNet block 개수 (리스트)
+        super(ResNet, self).__init__()                                                      #basic_block = [v1:"BasicBlock",v2:"Bottleneck"] / classes = class개수
 
         in_channels = input_shape
-        if(basic_block=='v1'):
+        if basic_block == 'v1': #Basic_block의 종류에 따라서 Feature Extract output 크기가 다름
             output_channels = 512
         else:
             output_channels = 2048
-        self.conv1 = nn.Conv2d(in_channels=in_channels,out_channels=64,kernel_size=7,stride=2,padding=3)
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=7, stride=2, padding=3)
         first_res_blocks = []
-        for _ in range(n_residual_blocks[0]):
-            if(basic_block=='v1'):
-                first_res_blocks.append(ResidualBlock_v1(64,64))
+        for i in range(n_residual_blocks[0]):
+            if basic_block == 'v1':
+                first_res_blocks.append(BasicBlock(64, 64))
             else:
-                first_res_blocks.append(ResidualBlock_v2(64, 256))
+                if (i == 0):
+                    first_res_blocks.append(BottleNeck(in_features=64, out_features=256))
+                else:
+                    first_res_blocks.append(BottleNeck(in_features=256, out_features=256))
 
         second_res_blocks = []
         for i in range(n_residual_blocks[1]):
-            if(basic_block=='v1'):
-                if(i == 0):
-                    second_res_blocks.append(ResidualBlock_v1(64,128,stride=2))
+            if basic_block == 'v1':
+                if i == 0:
+                    second_res_blocks.append(BasicBlock(64, 128, stride=2))
                 else:
-                    second_res_blocks.append(ResidualBlock_v1(128,128))
+                    second_res_blocks.append(BasicBlock(128, 128))
             else:
-                if (i == 0):
-                    second_res_blocks.append(ResidualBlock_v2(128, 512, stride=2))
+                if i == 0:
+                    second_res_blocks.append(BottleNeck(256, 512, stride=2))
                 else:
-                    second_res_blocks.append(ResidualBlock_v2(128, 512))
+                    second_res_blocks.append(BottleNeck(512, 512))
         thrid_res_blocks = []
         for i in range(n_residual_blocks[2]):
-            if(basic_block=='v1'):
-                if (i == 0):
-                    thrid_res_blocks.append(ResidualBlock_v1(128,256, stride=2))
+            if basic_block == 'v1':
+                if i == 0:
+                    thrid_res_blocks.append(BasicBlock(128, 256, stride=2))
                 else:
-                    thrid_res_blocks.append(ResidualBlock_v1(256,256))
+                    thrid_res_blocks.append(BasicBlock(256, 256))
             else:
-                if (i == 0):
-                    thrid_res_blocks.append(ResidualBlock_v2(256, 1024, stride=2))
+                if i == 0:
+                    thrid_res_blocks.append(BottleNeck(512, 1024, stride=2))
                 else:
-                    thrid_res_blocks.append(ResidualBlock_v2(256, 1024))
+                    thrid_res_blocks.append(BottleNeck(1024, 1024))
         firth_res_blocks = []
         for i in range(n_residual_blocks[3]):
-            if(basic_block=='v1'):
-                if (i == 0):
-                    firth_res_blocks.append(ResidualBlock_v1(256,512, stride=2))
+            if basic_block == 'v1':
+                if i == 0:
+                    firth_res_blocks.append(BasicBlock(256, 512, stride=2))
                 else:
-                    firth_res_blocks.append(ResidualBlock_v1(512,512))
+                    firth_res_blocks.append(BasicBlock(512, 512))
             else:
-                if (i == 0):
-                    firth_res_blocks.append(ResidualBlock_v2(512, 2048, stride=2))
+                if i == 0:
+                    firth_res_blocks.append(BottleNeck(1024, 2048, stride=2))
                 else:
-                    firth_res_blocks.append(ResidualBlock_v2(512, 2048))
-        self.conv2 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=3,stride=2,padding=1),
+                    firth_res_blocks.append(BottleNeck(2048, 2048))
+        self.conv2 = nn.Sequential(  # layer name  2번 layer의 경우에 down sampling은 3X3/2 Maxpooling을 통하여 처리함.
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             *first_res_blocks
         )
 
-        self.conv3 = nn.Sequential(
+        self.conv3 = nn.Sequential(  # layer name
             *second_res_blocks
         )
 
-        self.conv4 = nn.Sequential(
+        self.conv4 = nn.Sequential(  # layer name
             *thrid_res_blocks
         )
 
-        self.conv5 = nn.Sequential(
+        self.conv5 = nn.Sequential(  # layer name
             *firth_res_blocks
         )
 
-        self.averagepool = nn.AvgPool2d((1,1))
-        self.fc = nn.Linear(output_channels*7*7,1000)
+        self.averagepool = nn.AdaptiveAvgPool2d(output_size=(1, 1)) # output_size에 맞게 자동으로 kernel크기 설정
+        self.fc = nn.Linear(output_channels, classes)
 
-    def forward(self,input):
+    def forward(self, input):
         x = self.conv1(input)
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.conv4(x)
         x = self.conv5(x)
-        x = self.averagepool(x)
+        x = self.averagepool(x)  # average pool output = ( batch , channel, 1 , 1 )
         print(x.shape)
-        x = torch.flatten(x,1)
+        x = torch.flatten(x, 1) # (batch, channel)
         print(x.shape)
-        x = self.fc(x)
+        out = self.fc(x) # (batch , classes )
 
-        return x
-
-if __name__=='__main__':
-    #resnet18 =ResNet(input_shape=3, n_residual_blocks=[2,2,2,2], basic_block='v1')
-    #summary(resnet18.cuda(),input_size=(3,224,224))
-
-    resnet101 = ResNet(input_shape=3, n_residual_blocks=[3,4,23,3], basic_block='v2')
-    summary(resnet101.cuda(),input_size=(3,224,224))
+        return out
