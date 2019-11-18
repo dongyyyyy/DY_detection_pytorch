@@ -41,10 +41,13 @@ class ImageDataset_withLabel(Dataset):
 
     def __getitem__(self,index):
         img = Image.open(self.image_files[index % len(self.image_files)])
+        origin_width , origin_height = img.size
+        origin_img = np.array(img.getdata()).reshape(img.size[0], img.size[1],-1)
+
         img_data = self.resize_transform(img)
         label = read_text_file(self.label_files,index % len(self.image_files))
 
-        return {"img": img_data, "label": label}
+        return {"img": img_data, "label": label, "origin_width":origin_width,"origin_height":origin_height,"origin_img":origin_img}
 
     def __len__(self):  # data size를 넘겨주는 파트
         return len(self.image_files)  # 파일 길이 반환 ( 총 이미지 수 )

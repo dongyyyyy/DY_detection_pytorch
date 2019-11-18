@@ -58,8 +58,8 @@ class BottleNeck(nn.Module):  # Bottleneck ( ResNet-50 & ResNet-101 & ResNet-152
                                           stride=1)  # 그 외의 경우에는 down sampling을 하지 않고 filter만 확장
 
     def forward(self, input):
-        # params = list(self.conv_block.parameters())
-        # print("conv1 weight: ",params[0].size())
+        #params = list(self.conv_block.parameters())
+        #print("conv1 weight: ",params[0].size())
         block_out = self.conv_block(input)
         x = self.downsampling(input)
         out = self.ReLU(x + block_out)  # plus ( shortcut connection )
@@ -67,40 +67,34 @@ class BottleNeck(nn.Module):  # Bottleneck ( ResNet-50 & ResNet-101 & ResNet-152
 
 
 class ResNet(nn.Module):
-    def __init__(self, input_shape, n_residual_blocks, basic_block=BasicBlock, classes=1000):     #input_shape = 입력 이미지 (학습) / n_residual_blocks = ResNet block 개수 (리스트)
+    def __init__(self, input_shape, n_residual_blocks, basic_block=BasicBlock):     #input_shape = 입력 이미지 (학습) / n_residual_blocks = ResNet block 개수 (리스트)
         super(ResNet, self).__init__()                                                      #basic_block = [v1:"BasicBlock",v2:"Bottleneck"] / classes = class개수
 
         in_channels = input_shape
 
         self.blocks = basic_block
-        if self.blocks == basic_block: #Basic_block의 종류에 따라서 Feature Extract output 크기가 다름
-            output_channels = 512
-        else:
-            output_channels = 2048
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=7, stride=2, padding=3)
-        if self.blocks == basic_block:
+        if self.blocks == BasicBlock:
             self.resnet_blocks1 = self._make_layer(in_filters=64, out_filters=64, blocks=n_residual_blocks[0])
         else:
             self.resnet_blocks1 = self._make_layer(in_filters=64, out_filters=256, blocks=n_residual_blocks[0])
 
-        if self.blocks == basic_block:
+        if self.blocks == BasicBlock:
             self.resnet_blocks2 = self._make_layer(in_filters=64, out_filters=128, blocks=n_residual_blocks[1], stride=2)
         else:
-            self.resnet_blocks2 = self._make_layer(in_filters=128, out_filters=512, blocks=n_residual_blocks[1], stride=2)
+            self.resnet_blocks2 = self._make_layer(in_filters=256, out_filters=512, blocks=n_residual_blocks[1], stride=2)
 
-        if self.blocks == basic_block:
+        if self.blocks == BasicBlock:
             self.resnet_blocks3 = self._make_layer(in_filters=128, out_filters=256, blocks=n_residual_blocks[2], stride=2)
         else:
-            self.resnet_blocks3 = self._make_layer(in_filters=256, out_filters=1024, blocks=n_residual_blocks[2], stride=2)
+            self.resnet_blocks3 = self._make_layer(in_filters=512, out_filters=1024, blocks=n_residual_blocks[2], stride=2)
 
-        if self.blocks == basic_block:
+        if self.blocks == BasicBlock:
             self.resnet_blocks4 = self._make_layer(in_filters=256, out_filters=512, blocks=n_residual_blocks[3], stride=2)
         else:
-            self.resnet_blocks4 = self._make_layer(in_filters=512, out_filters=2048, blocks=n_residual_blocks[3], stride=2)
+            self.resnet_blocks4 = self._make_layer(in_filters=1024, out_filters=2048, blocks=n_residual_blocks[3], stride=2)
 
         self.max_pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.averagepool = nn.AdaptiveAvgPool2d(output_size=(1, 1)) # output_size에 맞게 자동으로 kernel크기 설정
-        self.fc = nn.Linear(output_channels, classes)
 
     def forward(self, input):
         x = self.conv1(input)
@@ -108,12 +102,9 @@ class ResNet(nn.Module):
         x = self.resnet_blocks1(x)
         x = self.resnet_blocks2(x)
         x = self.resnet_blocks3(x)
-        x = self.resnet_blocks4(x)
-        x = self.averagepool(x)  # average pool output = ( batch , channel, 1 , 1 )
-        x = torch.flatten(x, 1) # (batch, channel)
-        out = self.fc(x) # (batch , classes )
+        feature = self.resnet_blocks4(x)
 
-        return out
+        return feature
 
     def _make_layer(self, in_filters, out_filters, blocks,stride=1):
         layers = []
@@ -124,24 +115,46 @@ class ResNet(nn.Module):
                 layers.append(self.blocks(in_features=out_filters, out_features=out_filters))
         return nn.Sequential(*layers)
 
+class ResNet_Classes(nn.Module):
+    def __init__(self, input_shape, n_residual_blocks, basic_block=BasicBlock,classes = 1000):
+        super(ResNet_Classes, self).__init__()
+        self.blocks = basic_block
+        if self.blocks == BasicBlock: #Basic_block의 종류에 따라서 Feature Extract output 크기가 다름
+            output_channels = 512
+        else:
+            output_channels = 2048
+
+        self.featureExtract = ResNet(input_shape=input_shape,n_residual_blocks=n_residual_blocks,basic_block=basic_block)
+
+        self.averagepool = nn.AdaptiveAvgPool2d(output_size=(1, 1)) # output_size에 맞게 자동으로 kernel크기 설정
+        self.fc = nn.Linear(output_channels, classes)
+
+    def forward(self,input):
+        feature = self.featureExtract(input)
+        x = self.averagepool(feature)
+        x = torch.flatten(x,1)
+        out = self.fc(x)
+
+        return out
+
 def get_resnet18():
-    return ResNet(input_shape=3, n_residual_blocks=[2, 2, 2, 2], basic_block=BasicBlock)
+    return ResNet_Classes(input_shape=3, n_residual_blocks=[2, 2, 2, 2], basic_block=BasicBlock,classes=1000)
 
 
 def get_resnet34():
-    return ResNet(input_shape=3, n_residual_blocks=[3, 4, 6, 3], basic_block=BasicBlock)
+    return ResNet_Classes(input_shape=3, n_residual_blocks=[3, 4, 6, 3], basic_block=BasicBlock,classes=1000)
 
 
 def get_resnet50():
-    return ResNet(input_shape=3, n_residual_blocks=[3, 4, 6, 3], basic_block=BottleNeck)
+    return ResNet_Classes(input_shape=3, n_residual_blocks=[3, 4, 6, 3], basic_block=BottleNeck,classes=1000)
 
 
 def get_resnet101():
-    return ResNet(input_shape=3, n_residual_blocks=[3, 4, 23, 3], basic_block=BottleNeck)
+    return ResNet_Classes(input_shape=3, n_residual_blocks=[3, 4, 23, 3], basic_block=BottleNeck,classes=1000)
 
 
 def get_resnet152():
-    return ResNet(input_shape=3, n_residual_blocks=[3, 8, 36, 3], basic_block=BottleNeck)
+    return ResNet(input_shape=3, n_residual_blocks=[3, 8, 36, 3], basic_block=BottleNeck, classes=1000)
 
 
 

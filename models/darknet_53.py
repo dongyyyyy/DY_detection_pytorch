@@ -30,10 +30,10 @@ class darknet_block(nn.Module):
         return out
 
 class darknet_53(nn.Module):
-    def __init__(self,channel=3,n_darknet_blocks=[1,2,8,8,4],classes=1000):
+    def __init__(self,channel=3,n_darknet_blocks=[1,2,8,8,4]):
         super(darknet_53, self).__init__()
         self.channel = channel
-        self.classes = classes
+        #self.classes = classes
 
         self.conv1 = nn.Sequential(
             conv3X3(in_filters=self.channel, out_filters=32),
@@ -50,8 +50,8 @@ class darknet_53(nn.Module):
         self.down_sample4 = conv3X3(in_filters=512, out_filters=1024, stride=2)
         self.darknet_blocks5 = self._make_layer(filters=1024, blocks=n_darknet_blocks[4])
 
-        self.avg_pool = nn.AdaptiveAvgPool2d(output_size=(1, 1)) # output_size에 맞게 자동으로 kernel크기 설정
-        self.fc = nn.Linear(1024, classes)
+        #self.avg_pool = nn.AdaptiveAvgPool2d(output_size=(1, 1)) # output_size에 맞게 자동으로 kernel크기 설정
+        #self.fc = nn.Linear(1024, classes)
 
     def forward(self,input):
         x = self.conv1(input)
@@ -63,11 +63,11 @@ class darknet_53(nn.Module):
         x = self.down_sample3(x)
         x = self.darknet_blocks4(x)
         x = self.down_sample4(x)
-        x = self.darknet_blocks5(x)
-        x = self.avg_pool(x)
-        x = torch.flatten(x,1)
-        out = self.fc(x)
-        return out
+        feature = self.darknet_blocks5(x)
+        #x = self.avg_pool(x)
+        #x = torch.flatten(x,1)
+        #out = self.fc(x)
+        return feature
 
     def _make_layer(self,filters,blocks):
         layers = []
@@ -75,5 +75,25 @@ class darknet_53(nn.Module):
             layers.append(darknet_block(filters))
         return nn.Sequential(*layers)
 
+class darknet_53_class(nn.Module):
+    def __init__(self,channel=3,n_darknet_blocks=[1,2,8,8,4],classes=1000):
+        super(darknet_53_class, self).__init__()
+        self.classes = classes
+        self.featureExtract = darknet_53(channel=channel,n_darknet_blocks=n_darknet_blocks)
+        self.avg_pool = nn.AdaptiveAvgPool2d(output_size=(1, 1)) # output_size에 맞게 자동으로 kernel크기 설정
+        self.fc = nn.Linear(1024, classes)
+
+    def forward(self,input):
+        feature = self.featureExtract(input)
+        x = self.avg_pool(feature)
+        x = torch.flatten(x,1)
+        out = self.fc(x)
+
+        return out
+
+
 def get_darknet_53():
+    return darknet_53_class(3)
+
+def darknet_53_featureExtract():
     return darknet_53(3)
