@@ -2,6 +2,7 @@ from torchsummary import summary
 from models.ResNet import *
 from models.darknet_53 import *
 from models.VGGNet import *
+from models.Hourglass import *
 if __name__ == '__main__':
     '''
     resnet_extract1 = ResNet(input_shape=3,n_residual_blocks=[2,2,2,2],basic_block=BottleNeck)
@@ -18,10 +19,12 @@ if __name__ == '__main__':
     darknet = darknet_53()
     summary(darknet.cuda(), input_size=(3,416,416))
     '''
-    VGG = VGG_class(input_shape=3,layer="VGG16")
-    summary(VGG.cuda(),input_size=(3,224,224))
+#    VGG = VGG_class(input_shape=3,layer="VGG16")
+#    summary(VGG.cuda(),input_size=(3,224,224))
 
-    VGG = VGG_class(input_shape=3, layer="VGG19")
-    summary(VGG.cuda(), input_size=(3, 224, 224))
+    #VGG = VGG_class(input_shape=3, layer="VGG19")
+    #summary(VGG.cuda(), input_size=(3, 224, 224))
+
+    summary(Hourglass(input_shape=3).cuda(), input_size=(3, 224, 224))
 
 
