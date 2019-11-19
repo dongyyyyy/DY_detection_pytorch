@@ -25,6 +25,6 @@ if __name__ == '__main__':
     #VGG = VGG_class(input_shape=3, layer="VGG19")
     #summary(VGG.cuda(), input_size=(3, 224, 224))
 
-    summary(Hourglass(input_shape=3).cuda(), input_size=(3, 224, 224))
+    summary(Hourglass(input_shape=3).cuda(), input_size=(3, 256, 256))
 
 

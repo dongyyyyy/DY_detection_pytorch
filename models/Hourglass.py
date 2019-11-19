@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 
+
 class Residual(nn.Module):  # Bottleneck ( ResNet-50 & ResNet-101 & ResNet-152 )
     def __init__(self, in_features, out_features, stride=1):
         super(Residual, self).__init__()
@@ -45,6 +46,7 @@ def conv3X3(in_filters,out_filters,stride=1,padding=1):
             nn.ReLU()
     )
 
+
 def conv1X1(in_filters,out_filters,stride=1,padding=0):
     return nn.Sequential(
             nn.Conv2d(in_channels=in_filters,out_channels=out_filters,kernel_size=1,stride=stride,padding=padding),
@@ -63,7 +65,9 @@ class Hourglass(nn.Module):
         )
         self.residual1 = Residual(in_features=64,out_features=256)
         self.residual2 = Residual(in_features=256, out_features=256)
-        self.Upsample = nn.UpsamplingNearest2d(scale_factor=2)
+
+        self.Upsample_nearest = nn.UpsamplingNearest2d(scale_factor=2)
+        self.Upsample_bilinear = nn.UpsamplingBilinear2d(scale_factor=2)
 
         self.Max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
@@ -71,8 +75,32 @@ class Hourglass(nn.Module):
         x = self.conv1(input)
         x = self.residual1(x)
         x = self.Max_pool(x)
+        skip1 = self.residual2(x)
+        x = self.Max_pool(skip1)
+        skip2 = self.residual2(x)
+        x = self.Max_pool(skip2)
+        skip3 = self.residual2(x)
+        x = self.Max_pool(skip3)
+        skip4 = self.residual2(x)
+        x = self.Max_pool(skip4)
         x = self.residual2(x)
+        x = self.Upsample_nearest(x)
+        x = x + skip4
+        #x = torch.add(x,skip4)
+        x = self.residual2(x)
+        x = self.Upsample_nearest(x)
+        x = x + skip3
+        #x = torch.add(x,skip3)
+        x = self.residual2(x)
+        x = self.Upsample_nearest(x)
+        x = x + skip2
+        #x = torch.add(x,skip2)
+        x = self.residual2(x)
+        x = self.Upsample_nearest(x)
+        x = x + skip1
+        #x = torch.add(x,skip1)
+        out = self.residual2(x)
 
-        return x
+        return out
 
 

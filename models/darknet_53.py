@@ -29,6 +29,7 @@ class darknet_block(nn.Module):
         out = input + block_out  # plus ( shortcut connection ) activation = Linear [ y = x ]
         return out
 
+
 class darknet_53(nn.Module):
     def __init__(self,channel=3,n_darknet_blocks=[1,2,8,8,4]):
         super(darknet_53, self).__init__()
@@ -64,9 +65,7 @@ class darknet_53(nn.Module):
         x = self.darknet_blocks4(x)
         x = self.down_sample4(x)
         feature = self.darknet_blocks5(x)
-        #x = self.avg_pool(x)
-        #x = torch.flatten(x,1)
-        #out = self.fc(x)
+
         return feature
 
     def _make_layer(self,filters,blocks):
@@ -74,6 +73,7 @@ class darknet_53(nn.Module):
         for i in range(blocks):
             layers.append(darknet_block(filters))
         return nn.Sequential(*layers)
+
 
 class darknet_53_class(nn.Module):
     def __init__(self,channel=3,n_darknet_blocks=[1,2,8,8,4],classes=1000):
@@ -94,6 +94,7 @@ class darknet_53_class(nn.Module):
 
 def get_darknet_53():
     return darknet_53_class(3)
+
 
 def darknet_53_featureExtract():
     return darknet_53(3)
