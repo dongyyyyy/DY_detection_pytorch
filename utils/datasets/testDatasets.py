@@ -57,7 +57,7 @@ if __name__ == '__main__':
             cv2.putText(origin_img,class_name,(x1,y1+10),cv2.FONT_ITALIC,0.3,(0,0,255),1)
             cv2.rectangle(origin_img, (x1,y1), (x2,y2), (0, 0, 255), 1) # label을 통하여 boundingBox그리기
             # cv.rectangle(img,(x1,y1),(x2,y2),color,thickness,lineType,shift)
-        save_image(dataset["img"],"./%d.jpg"%i)
+        #save_image(dataset["img"],"./%d.jpg"%i)
         #cv shape = (height, width, channel)
         plt.imshow(origin_img)
         plt.show()
